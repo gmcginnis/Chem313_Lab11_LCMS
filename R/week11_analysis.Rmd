@@ -9,11 +9,17 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(janitor)
+library(ggthemes)
 
 standard <- read.csv("data/lcms.csv", skip = 1) %>%
   clean_names() %>%
   select(1:5) %>%
-  filter(standard %in% c(1,2,3,4))
+  filter(standard %in% c(1,2,3,4)) %>%
+  rename(conc = 2,
+         cal_1 = 3,
+         cal_2 = 4,
+         cal_3 = 5) %>%
+  pivot_longer(cols = 3:5, names_to = "cal", values_to = "area")
 
 lcms <- read.csv("data/lcms.csv", skip = 9) %>%
   select(1:2) %>%
@@ -31,7 +37,37 @@ lcms <- read.csv("data/lcms.csv", skip = 9) %>%
 ```
 
 ```{r cal curve}
+ggplot(standard, aes(x = conc, y = area))+
+  stat_smooth(method = "lm", se = FALSE)+
+  geom_point()+
+  theme_few()+
+  labs(x = "Concentration", y = "Area under curve")
 
+curve_results <- summary(lm(area ~ conc, data = standard))
+
+model <- lm(area ~ conc, data = standard)
+
+slope <- model$coefficients[2]
+intercept <- model$coefficients[1]
+slope_std <- summary(model)$coefficients[2,2]
+intercept_std <- summary(model)$coefficients[1,2]
 ```
+
+```{r conc calculations}
+slope <- model$coefficients[2]
+intercept <- model$coefficients[1]
+slope_std <- summary(model)$coefficients[2,2]
+intercept_std <- summary(model)$coefficients[1,2]
+
+conc_results <- lcms %>%
+  mutate(conc = (area-intercept)/slope)
+
+ggplot(conc_results, aes(x = conc, y = area))+
+  stat_smooth(method = "lm", se = FALSE)+
+  geom_point()+
+  theme_few()+
+  labs(x = "Concentration", y = "Area under curve")
+```
+
 
 
