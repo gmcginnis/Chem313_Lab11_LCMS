@@ -1,0 +1,37 @@
+---
+title: "Week 11"
+author: "Gillian McGinnis"
+date: "11/20/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(janitor)
+
+standard <- read.csv("data/lcms.csv", skip = 1) %>%
+  clean_names() %>%
+  select(1:5) %>%
+  filter(standard %in% c(1,2,3,4))
+
+lcms <- read.csv("data/lcms.csv", skip = 9) %>%
+  select(1:2) %>%
+  rename(loc_date = X,
+         area = X.1) %>%
+  mutate(loc = case_when(
+    str_detect(loc_date, "E") ~ "E",
+    str_detect(loc_date, "W") ~ "W"
+  )) %>%
+  mutate(data = case_when(
+    str_detect(loc_date, "1750") ~ "1750",
+    str_detect(loc_date, "1950") ~ "1950",
+    str_detect(loc_date, "2020") ~ "2020"
+  ))
+```
+
+```{r cal curve}
+
+```
+
+
