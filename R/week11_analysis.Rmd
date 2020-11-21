@@ -101,29 +101,29 @@ ggplot(conc_summary, aes(x = loc_date, y = mean_conc, color = date))+
   #facet_wrap(~loc)
 ```
 
-```{r error prop}
+```{r error prop, eval = FALSE, include = FALSE}
 ## boo
-m <- equation$slope
-b <- equation$intercept
-y <- conc_summary$mean_conc
-      
-b_e <- equation$intercept_std
-m_e <- equation$slope_std
-      
-x <- (y-b)/m
-
-RSD <- ((conc_summary$sd_conc)*conc_summary$mean_conc)
-#CPS <- sample_data$cps
-CONC <- conc_summary$mean_conc
-      
-e_yb <- sqrt((RSD)^2 + (b_e)^2)
-    #yb <- CPS-b
-yb <- CONC-b
-e_x <- x*sqrt((e_yb/yb)^2 + (m_e/m)^2)
-
-
-conc_summary_error <- conc_summary %>%
-  mutate()
+# m <- equation$slope
+# b <- equation$intercept
+# y <- conc_summary$mean_conc
+#       
+# b_e <- equation$intercept_std
+# m_e <- equation$slope_std
+#       
+# x <- (y-b)/m
+# 
+# RSD <- ((conc_summary$sd_conc)*conc_summary$mean_conc)
+# #CPS <- sample_data$cps
+# CONC <- conc_summary$mean_conc
+#       
+# e_yb <- sqrt((RSD)^2 + (b_e)^2)
+#     #yb <- CPS-b
+# yb <- CONC-b
+# e_x <- x*sqrt((e_yb/yb)^2 + (m_e/m)^2)
+# 
+# 
+# conc_summary_error <- conc_summary %>%
+#   mutate()
 ```
 
 ```{r airborne concentration}
@@ -183,6 +183,8 @@ anova_df <- anova_df %>%
     p.value < 0.05 ~ "p < 0.05", # Reject null hypothesiss; diff is significant
     p.value >= 0.05 ~ "Non-Sig" # Fail to reject null hyp; diff is not significant
   ))
+
+anova_df
 ```
 
 ```{r tukey messy, eval = FALSE, include = FALSE}
