@@ -187,6 +187,32 @@ anova_df <- anova_df %>%
 anova_df
 ```
 
+```{r data viz}
+ggplot(airborne_conc, aes(x = date, y = actual, color = date))+
+  geom_point()+
+  geom_errorbar(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
+  expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
+  theme_few()+
+  facet_wrap(~loc)+
+  coord_flip()
+
+ggplot(airborne_conc, aes(x = date, y = actual, color = loc, group = loc))+
+  #facet_wrap(~loc)+
+  geom_point(position = position_dodge(0.3), stat = "identity")+
+  geom_linerange(ymin = airborne_conc$lower, ymax = airborne_conc$upper,
+                position = position_dodge(0.3), stat = "identity")+
+  expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
+  theme_few()
+
+ggplot(conc_ci, aes(x = loc, y = mean_conc, color = loc))+
+  facet_wrap(~date)+
+  geom_point()+
+  geom_errorbar(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
+  expand_limits(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
+  theme_few()
+```
+
+
 ```{r tukey messy, eval = FALSE, include = FALSE}
 # tukey_df <- NULL
 # tukey_test <- function(unique_site){
