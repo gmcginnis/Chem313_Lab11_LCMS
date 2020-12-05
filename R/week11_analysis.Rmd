@@ -50,6 +50,7 @@ cal_curve <- ggplot(standard, aes(x = conc, y = area))+
   stat_smooth(method = "lm", se = FALSE, color = "red")+
   geom_point(shape = 1)+
   theme_few()+
+  theme(text = element_text(family = "Times"))+
   labs(x = lab_calcurve_x, y = lab_calcurve_y)
 
 ggsave("cal_curve.png", plot = cal_curve, path = "figures/")
@@ -115,15 +116,19 @@ ci95_alt <- all_airborne %>%
 
 lab_conc_airborne <- expression(paste("Airborne concentration (", mu, "g/m"^3*")"))
 
+ci95_alt$loc <- factor(ci95_alt$loc, levels = c("West", "East"))
+
 ci95 <- ggplot(ci95_alt, aes(x = date, y = mean, color = loc))+
   geom_point(position = position_dodge(width=0.9))+
   geom_errorbar(ymin = ci95_alt$lower_ci, ymax = ci95_alt$upper_ci, position = position_dodge(width=0.9))+
   expand_limits(ymin = 15, ymax = 60)+
   theme_few()+
+  theme(text = element_text(family = "Times"))+
   labs(x = "Date", y = lab_conc_airborne, color = "Location")
 
 ggsave("ci95.png", plot = ci95, path = "figures/")
 ```
+
 
 ## Stat test: Grubbs test for outliers
 
@@ -187,6 +192,36 @@ grubbs.test(grubbs_df$conc)
 ```
 
 
+```{r ci95 wo outlier, include = FALSE, eval = FALSE}
+ci95_alt2 <- all_airborne %>%
+  filter(conc < 10) %>%
+  group_by(loc_date) %>%
+  summarise(mean = mean(air_conc),
+         sd = sd(air_conc),
+         n = n()) %>%
+  mutate(se = qnorm(0.975)*sd/sqrt(n),
+         lower_ci = mean - se,
+         upper_ci = mean + se) %>%
+  mutate(loc = case_when(
+    str_detect(loc_date, "E") ~ "East",
+    str_detect(loc_date, "W") ~ "West"
+  )) %>%
+  mutate(date = case_when(
+    str_detect(loc_date, "1750") ~ "1750",
+    str_detect(loc_date, "1950") ~ "1950",
+    str_detect(loc_date, "2020") ~ "2020"
+  ))
+
+ci95_alt2$loc <- factor(ci95_alt2$loc, levels = c("West", "East"))
+
+ggplot(ci95_alt2, aes(x = date, y = mean, color = loc))+
+  geom_point(position = position_dodge(width=0.9))+
+  geom_errorbar(ymin = ci95_alt2$lower_ci, ymax = ci95_alt2$upper_ci, position = position_dodge(width=0.9))+
+  expand_limits(ymin = 15, ymax = 60)+
+  theme_few()+
+  theme(text = element_text(family = "Times"))+
+  labs(x = "Date", y = lab_conc_airborne, color = "Location")
+```
 
 ```{r conc calculations, eval = FALSE, include = FALSE}
 conc_results <- lcms %>%
