@@ -11,6 +11,7 @@ library(tidyverse)
 library(janitor)
 library(ggthemes)
 library(broom)
+library(purrr)
 library("outliers")
 
 standard <- read.csv("data/lcms.csv", skip = 1) %>%
@@ -28,8 +29,8 @@ lcms <- read.csv("data/lcms.csv", skip = 9) %>%
   rename(loc_date = X,
          area = X.1) %>%
   mutate(loc = case_when(
-    str_detect(loc_date, "E") ~ "E",
-    str_detect(loc_date, "W") ~ "W"
+    str_detect(loc_date, "E") ~ "East",
+    str_detect(loc_date, "W") ~ "West"
   )) %>%
   mutate(date = case_when(
     str_detect(loc_date, "1750") ~ "1750",
@@ -38,12 +39,20 @@ lcms <- read.csv("data/lcms.csv", skip = 9) %>%
   ))
 ```
 
+## Cal Curve
+
 ```{r cal curve}
-ggplot(standard, aes(x = conc, y = area))+
-  stat_smooth(method = "lm", se = FALSE)+
-  geom_point()+
+
+lab_calcurve_x <- expression(paste("Concentration (", mu, "g/mL)"))
+lab_calcurve_y <- ("Area of major chromatogram peak")
+
+cal_curve <- ggplot(standard, aes(x = conc, y = area))+
+  stat_smooth(method = "lm", se = FALSE, color = "red")+
+  geom_point(shape = 1)+
   theme_few()+
-  labs(x = "Concentration", y = "Area under curve")
+  labs(x = lab_calcurve_x, y = lab_calcurve_y)
+
+ggsave("cal_curve.png", plot = cal_curve, path = "figures/")
 
 curve_results <- summary(lm(area ~ conc, data = standard))
 
@@ -56,16 +65,139 @@ intercept_std <- summary(model)$coefficients[1,2]
 equation <- tibble(slope, slope_std, intercept, intercept_std)
 ```
 
+## Calculating levoglucosan concentrations in each sample with propogated error
 
-```{r conc calculations}
+```{r conc calculations corrected}
+all_conc <- lcms %>%
+  mutate(conc = (area-intercept)/slope) %>%
+    mutate(#rsd = (100*sd_conc)/mean_conc,
+         #e_yb = sqrt(rsd)^2 + intercept_std,
+         e_yb = intercept_std, #pretending that there is no error in y b/c minions took very few samples
+         yb = conc-intercept,
+         e_x = conc*sqrt((e_yb/yb)^2 + (slope_std/slope)^2)) %>%
+  rename(conc_error = e_x) %>%
+  select(loc_date, conc, conc_error)
+```
+
+## Calculating airborne levoglucosan concentrations in each sample with propogated error
+
+```{r airborne conc corrected}
+all_airborne <- all_conc %>%
+  mutate(air_conc = conc*2*70/24,
+         air_error = air_conc*sqrt(
+           (conc_error/conc)^2+
+             ((sqrt((0.1^2)+(0.1)^2))/(1+1))^2 +
+             (0.1/70)^2+
+             (0.0007/24)^2
+         ))
+```
+
+## Stat analysis: averages with standard deviation, and 95CI
+
+```{r ci95 corrected}
+ci95_alt <- all_airborne %>%
+  group_by(loc_date) %>%
+  summarise(mean = mean(air_conc),
+         sd = sd(air_conc),
+         n = n()) %>%
+  mutate(se = qnorm(0.975)*sd/sqrt(n),
+         lower_ci = mean - se,
+         upper_ci = mean + se) %>%
+  mutate(loc = case_when(
+    str_detect(loc_date, "E") ~ "East",
+    str_detect(loc_date, "W") ~ "West"
+  )) %>%
+  mutate(date = case_when(
+    str_detect(loc_date, "1750") ~ "1750",
+    str_detect(loc_date, "1950") ~ "1950",
+    str_detect(loc_date, "2020") ~ "2020"
+  ))
+
+lab_conc_airborne <- expression(paste("Airborne concentration (", mu, "g/m"^3*")"))
+
+ci95 <- ggplot(ci95_alt, aes(x = date, y = mean, color = loc))+
+  geom_point(position = position_dodge(width=0.9))+
+  geom_errorbar(ymin = ci95_alt$lower_ci, ymax = ci95_alt$upper_ci, position = position_dodge(width=0.9))+
+  expand_limits(ymin = 15, ymax = 60)+
+  theme_few()+
+  labs(x = "Date", y = lab_conc_airborne, color = "Location")
+
+ggsave("ci95.png", plot = ci95, path = "figures/")
+```
+
+## Stat test: Grubbs test for outliers
+
+```{r grubbs}
+grubbs_df <- all_airborne %>%
+  filter(loc_date == "W2020")
+grubbs.test(grubbs_df$conc)
+#p val = 0.04078, that's an outlier, fellers
+
+#source: https://stackoverflow.com/questions/45486159/several-grubbs-tests-simultaneously-in-r
+grubbs_all <- all_airborne %>%
+  group_by(loc_date) %>%
+  nest() %>%
+  mutate(n = map_dbl(data, ~ nrow(.x)), # number of entries
+         G = map(data, ~ grubbs.test(.x$conc)$statistic[[1]]), # G statistic
+         U = map(data, ~ grubbs.test(.x$conc)$statistic[[2]]), # U statistic
+         grubbs = map(data, ~ grubbs.test(.x$conc)$alternative), # Alternative hypotesis
+         p_grubbs = map_dbl(data, ~ grubbs.test(.x$conc)$p.value)) %>% # p-value
+  # Let's make the output more fancy
+  mutate(G = signif(unlist(G), 3),
+         U = signif(unlist(U), 3),
+         grubbs = unlist(grubbs),
+         p_grubbs = signif(p_grubbs, 3)) %>%
+  select(-data) %>% # remove temporary column
+  arrange(p_grubbs) %>%
+  mutate(label = case_when(
+    p_grubbs < 0.05 ~ "p < 0.05", # Reject null hypothesiss; diff is significant
+    p_grubbs >= 0.05 ~ "Non-Sig" # Fail to reject null hyp; diff is not significant
+  ))
+grubbs_all
+#only W2020 has a significant outlier!
+```
+
+# SUMMARY OF RESULTS
+
+```{r all}
+#calibration curve; 2
+cal_curve
+
+#concentration; 3
+# units: µg/mL
+all_conc %>%
+  select(loc_date, conc, conc_error)
+
+#airborne conc; 4
+# math: 2mL dilution factor (1mL water + 1mL ethanol), 70 b/c cut 1in^2, 24 hr
+# units: µg/m^3
+all_airborne %>%
+  select(loc_date, air_conc, air_error)
+
+#stat tests; 5
+# 95ci results
+# units: µg/m^3
+ci95_alt %>%
+  select(loc_date, mean, sd, lower_ci, upper_ci)
+# 95ci plot (avg conc w 95CI, units: µg/m^3)
+ci95
+# grubbs test for outliers (only W2020 is significant)
+grubbs.test(grubbs_df$conc)
+
+```
+
+
+
+```{r conc calculations, eval = FALSE, include = FALSE}
 conc_results <- lcms %>%
   mutate(conc = (area-intercept)/slope)
 
+#Checking that the values line up with the cal curve
 ggplot(conc_results, aes(x = conc, y = area))+
-  stat_smooth(method = "lm", se = FALSE)+
-  geom_point()+
+  stat_smooth(method = "lm", se = FALSE, color = "red")+
+  geom_point(shape = 1)+
   theme_few()+
-  labs(x = "Concentration", y = "Area under curve")
+  labs(x = lab_calcurve_x, y = lab_calcurve_y)
 
 conc_summary <- conc_results %>%
   group_by(loc_date) %>%
@@ -83,8 +215,8 @@ conc_summary <- conc_results %>%
   mutate(upper = mean_conc+conc_error,
          lower = mean_conc-conc_error) %>%
   mutate(loc = case_when(
-    str_detect(loc_date, "E") ~ "E",
-    str_detect(loc_date, "W") ~ "W"
+    str_detect(loc_date, "E") ~ "East",
+    str_detect(loc_date, "W") ~ "West"
   )) %>%
   mutate(date = case_when(
     str_detect(loc_date, "1750") ~ "1750",
@@ -92,13 +224,23 @@ conc_summary <- conc_results %>%
     str_detect(loc_date, "2020") ~ "2020"
   ))
 
-ggplot(conc_summary, aes(x = loc_date, y = mean_conc, color = date))+
+# ggplot(conc_summary, aes(x = loc_date, y = mean_conc, color = date))+
+#   geom_point()+
+#   geom_errorbar(ymin = conc_summary$lower, ymax = conc_summary$upper)+
+#   labs(x = lab_conccalc)+
+#   theme_few()+
+#   expand_limits(ymin = conc_summary$lower, ymax = conc_summary$upper)
+#   #facet_wrap(~loc)
+
+#Plot. Concentration.
+ggplot(conc_summary, aes(x = date, y = mean_conc, color = loc))+
+  facet_wrap(~loc)+
   geom_point()+
   geom_errorbar(ymin = conc_summary$lower, ymax = conc_summary$upper)+
-  labs(x = "Post extraction concentration")+
+  labs(x = "Date", y = lab_calcurve_x)+
   theme_few()+
+  theme(legend.position = "none")+
   expand_limits(ymin = conc_summary$lower, ymax = conc_summary$upper)
-  #facet_wrap(~loc)
 ```
 
 ```{r error prop, eval = FALSE, include = FALSE}
@@ -126,40 +268,88 @@ ggplot(conc_summary, aes(x = loc_date, y = mean_conc, color = date))+
 #   mutate()
 ```
 
-```{r airborne concentration}
+```{r airborne concentration, eval = FALSE, include = FALSE}
 airborne_conc <- conc_summary %>%
   mutate(actual = mean_conc*2*70/24,
          actual_e = conc_error*2*70/24,
-         lower = actual-actual_e,
-         upper = actual+actual_e) # 2mL dilution factor (1mL water + 1mL ethanol), 70 b/c cut 1in^2, 24 hr
+         actual_lower = actual-actual_e,
+         actual_upper = actual+actual_e) # 2mL dilution factor (1mL water + 1mL ethanol), 70 b/c cut 1in^2, 24 hr
 
-ggplot(airborne_conc, aes(x = loc_date, y = actual, color = date))+
+lab_conc_airborne <- expression(paste("Airborne concentration (", mu, "g/m"^3*")"))
+
+# ggplot(airborne_conc, aes(x = loc_date, y = actual, color = date))+
+#   geom_point()+
+#   geom_errorbar(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
+#   expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$actual_upper)+
+#   theme_few()
+
+ggplot(airborne_conc, aes(x = date, y = actual, color = loc))+
+  facet_wrap(~loc)+
   geom_point()+
-  geom_errorbar(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
-  expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
-  theme_few()
+  geom_linerange(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
+  #expand_limits(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
+  expand_limits(ymin = 15, ymax = 60)+
+  theme_few()+
+  labs(x = "Date", y = lab_conc_airborne)+
+  theme(legend.position = "none")
+
+ggplot(airborne_conc, aes(x = date, y = actual, color = loc))+
+  geom_point(position = position_dodge(width=0.3))+
+  geom_linerange(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper, position = position_dodge(width=0.3))+
+  expand_limits(ymin = 15, ymax = 60)+
+  theme_few()+
+  labs(x = "Date", y = lab_conc_airborne, color = "Location")
 ```
 
+```{r 95ci, eval = FALSE, include = FALSE}
+#using unadjusted data
+# conc_ci <- conc_summary %>%
+#   mutate(se = qnorm(0.975)*sd_conc/sqrt(n),
+#          lower_ci = mean_conc - se,
+#          upper_ci = mean_conc + se)
+# 
+# ggplot(conc_ci, aes(x = loc_date, y = mean_conc))+
+#   geom_point()+
+#   geom_errorbar(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
+#   expand_limits(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
+#   theme_few()
 
-```{r 95ci}
-conc_ci <- conc_summary %>%
-  mutate(se = qnorm(0.975)*sd_conc/sqrt(n),
-         lower_ci = mean_conc - se,
-         upper_ci = mean_conc + se)
+#using adjusted data
+conc_ci_adj <- airborne_conc %>%
+  mutate(actual_sd = sd_conc*2*70/24,
+         se = qnorm(0.975)*actual_sd/sqrt(n),
+         lower_ci = actual - se,
+         upper_ci = actual + se)
 
-ggplot(conc_ci, aes(x = loc_date, y = mean_conc))+
-  geom_point()+
-  geom_errorbar(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
-  expand_limits(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
-  theme_few()
+# ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
+#   facet_wrap(~loc)+
+#   geom_point()+
+#   geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci)+
+#   expand_limits(ymin = 15, ymax = 60)+
+#   theme_few()+
+#   labs(x = "Date", y = lab_conc_airborne)+
+#   theme(legend.position = "none")
 
-grubbs_df <- conc_results %>%
-  filter(loc_date == "W2020")
-grubbs.test(grubbs_df$conc)
-#p val = 0.04078, that's an outlier, fellers
+ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
+  geom_point(position = position_dodge(width=0.9))+
+  geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci, position = position_dodge(width=0.9))+
+  expand_limits(ymin = 15, ymax = 60)+
+  theme_few()+
+  labs(x = "Date", y = lab_conc_airborne, color = "Location")
+
+##ggsave("ci95.png", plot = ci95, path = "figures/")
+
+
+# ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
+#   geom_point(position = position_dodge(width=0.9))+
+#   geom_linerange(ymin = conc_ci_adj$actual_lower, ymax = conc_ci_adj$actual_upper, position = position_dodge(width=0.9), alpha=0.5, linetype="dotted")+
+#   geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci, position = position_dodge(width=0.9))+
+#   expand_limits(ymin = 15, ymax = 60)+
+#   theme_few()+
+#   labs(x = "Date", y = lab_conc_airborne, color = "Location")
 ```
 
-```{r anova}
+```{r anova, eval = FALSE, include = FALSE}
 anova_df <- NULL
 aov_test <- function(unique_site){
   filtered_df <- conc_results %>%
@@ -187,7 +377,7 @@ anova_df <- anova_df %>%
 anova_df
 ```
 
-```{r data viz}
+```{r data viz, eval = FALSE, include = FALSE}
 ggplot(airborne_conc, aes(x = date, y = actual, color = date))+
   geom_point()+
   geom_errorbar(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
@@ -212,14 +402,13 @@ ggplot(conc_ci, aes(x = loc, y = mean_conc, color = loc))+
   theme_few()
 ```
 
-
 ```{r tukey messy, eval = FALSE, include = FALSE}
 # tukey_df <- NULL
 # tukey_test <- function(unique_site){
 #   filtered_df <- conc_results %>%
 #     mutate(actual = conc*2*70/24) %>%
 #     filter(loc == unique_site)
-#   
+# 
 #   anova <- aov(actual ~ date, data = filtered_df)
 #   tukey_table <- TukeyHSD(anova)
 #   plot(tukey_table, las = 1, sub = paste(unique_site))
@@ -227,7 +416,7 @@ ggplot(conc_ci, aes(x = loc, y = mean_conc, color = loc))+
 #   tukey_frame <- as.data.frame(tukey_table$loc) %>%
 #     rownames_to_column() %>%
 #     mutate(loc = unique_site)
-#   
+# 
 #   tukey_df <<- rbind(tukey_df, tukey_frame)
 #   #print(tukey_df)
 #   #return(tukey_df)
