@@ -1,2 +1,2 @@
 # Chem313_Lab11_LCMS
-Data analysis of (fabricated) LC-MS levoglucosan samples and calibration curve
+Data analysis of (fabricated) LC-MS levoglucosan samples and calibration curve. Please note that the data for this anaylsis has been fabricated and does not represent true/known values.
