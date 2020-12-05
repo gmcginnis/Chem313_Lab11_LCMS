@@ -224,58 +224,58 @@ ggplot(ci95_alt2, aes(x = date, y = mean, color = loc))+
 ```
 
 ```{r conc calculations, eval = FALSE, include = FALSE}
-conc_results <- lcms %>%
-  mutate(conc = (area-intercept)/slope)
-
-#Checking that the values line up with the cal curve
-ggplot(conc_results, aes(x = conc, y = area))+
-  stat_smooth(method = "lm", se = FALSE, color = "red")+
-  geom_point(shape = 1)+
-  theme_few()+
-  labs(x = lab_calcurve_x, y = lab_calcurve_y)
-
-conc_summary <- conc_results %>%
-  group_by(loc_date) %>%
-  summarize(mean_conc = mean(conc),
-            sd_conc = sd(conc),
-            n = n()) %>%
-  #mutate(rsd = sd_conc*mean_conc)
-  mutate(#rsd = (100*sd_conc)/mean_conc,
-         #e_yb = sqrt(rsd)^2 + intercept_std,
-         e_yb = intercept_std, #pretending that there is no error in y b/c minions took very few samples
-         yb = mean_conc-intercept,
-         e_x = mean_conc*sqrt((e_yb/yb)^2 + (slope_std/slope)^2)) %>%
-  select(loc_date, mean_conc, sd_conc, e_x, n) %>%
-  rename(conc_error = e_x) %>%
-  mutate(upper = mean_conc+conc_error,
-         lower = mean_conc-conc_error) %>%
-  mutate(loc = case_when(
-    str_detect(loc_date, "E") ~ "East",
-    str_detect(loc_date, "W") ~ "West"
-  )) %>%
-  mutate(date = case_when(
-    str_detect(loc_date, "1750") ~ "1750",
-    str_detect(loc_date, "1950") ~ "1950",
-    str_detect(loc_date, "2020") ~ "2020"
-  ))
-
-# ggplot(conc_summary, aes(x = loc_date, y = mean_conc, color = date))+
+# conc_results <- lcms %>%
+#   mutate(conc = (area-intercept)/slope)
+# 
+# #Checking that the values line up with the cal curve
+# ggplot(conc_results, aes(x = conc, y = area))+
+#   stat_smooth(method = "lm", se = FALSE, color = "red")+
+#   geom_point(shape = 1)+
+#   theme_few()+
+#   labs(x = lab_calcurve_x, y = lab_calcurve_y)
+# 
+# conc_summary <- conc_results %>%
+#   group_by(loc_date) %>%
+#   summarize(mean_conc = mean(conc),
+#             sd_conc = sd(conc),
+#             n = n()) %>%
+#   #mutate(rsd = sd_conc*mean_conc)
+#   mutate(#rsd = (100*sd_conc)/mean_conc,
+#          #e_yb = sqrt(rsd)^2 + intercept_std,
+#          e_yb = intercept_std, #pretending that there is no error in y b/c minions took very few samples
+#          yb = mean_conc-intercept,
+#          e_x = mean_conc*sqrt((e_yb/yb)^2 + (slope_std/slope)^2)) %>%
+#   select(loc_date, mean_conc, sd_conc, e_x, n) %>%
+#   rename(conc_error = e_x) %>%
+#   mutate(upper = mean_conc+conc_error,
+#          lower = mean_conc-conc_error) %>%
+#   mutate(loc = case_when(
+#     str_detect(loc_date, "E") ~ "East",
+#     str_detect(loc_date, "W") ~ "West"
+#   )) %>%
+#   mutate(date = case_when(
+#     str_detect(loc_date, "1750") ~ "1750",
+#     str_detect(loc_date, "1950") ~ "1950",
+#     str_detect(loc_date, "2020") ~ "2020"
+#   ))
+# 
+# # ggplot(conc_summary, aes(x = loc_date, y = mean_conc, color = date))+
+# #   geom_point()+
+# #   geom_errorbar(ymin = conc_summary$lower, ymax = conc_summary$upper)+
+# #   labs(x = lab_conccalc)+
+# #   theme_few()+
+# #   expand_limits(ymin = conc_summary$lower, ymax = conc_summary$upper)
+# #   #facet_wrap(~loc)
+# 
+# #Plot. Concentration.
+# ggplot(conc_summary, aes(x = date, y = mean_conc, color = loc))+
+#   facet_wrap(~loc)+
 #   geom_point()+
 #   geom_errorbar(ymin = conc_summary$lower, ymax = conc_summary$upper)+
-#   labs(x = lab_conccalc)+
+#   labs(x = "Date", y = lab_calcurve_x)+
 #   theme_few()+
+#   theme(legend.position = "none")+
 #   expand_limits(ymin = conc_summary$lower, ymax = conc_summary$upper)
-#   #facet_wrap(~loc)
-
-#Plot. Concentration.
-ggplot(conc_summary, aes(x = date, y = mean_conc, color = loc))+
-  facet_wrap(~loc)+
-  geom_point()+
-  geom_errorbar(ymin = conc_summary$lower, ymax = conc_summary$upper)+
-  labs(x = "Date", y = lab_calcurve_x)+
-  theme_few()+
-  theme(legend.position = "none")+
-  expand_limits(ymin = conc_summary$lower, ymax = conc_summary$upper)
 ```
 
 ```{r error prop, eval = FALSE, include = FALSE}
@@ -304,137 +304,137 @@ ggplot(conc_summary, aes(x = date, y = mean_conc, color = loc))+
 ```
 
 ```{r airborne concentration, eval = FALSE, include = FALSE}
-airborne_conc <- conc_summary %>%
-  mutate(actual = mean_conc*2*70/24,
-         actual_e = conc_error*2*70/24,
-         actual_lower = actual-actual_e,
-         actual_upper = actual+actual_e) # 2mL dilution factor (1mL water + 1mL ethanol), 70 b/c cut 1in^2, 24 hr
-
-lab_conc_airborne <- expression(paste("Airborne concentration (", mu, "g/m"^3*")"))
-
-# ggplot(airborne_conc, aes(x = loc_date, y = actual, color = date))+
-#   geom_point()+
-#   geom_errorbar(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
-#   expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$actual_upper)+
-#   theme_few()
-
-ggplot(airborne_conc, aes(x = date, y = actual, color = loc))+
-  facet_wrap(~loc)+
-  geom_point()+
-  geom_linerange(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
-  #expand_limits(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
-  expand_limits(ymin = 15, ymax = 60)+
-  theme_few()+
-  labs(x = "Date", y = lab_conc_airborne)+
-  theme(legend.position = "none")
-
-ggplot(airborne_conc, aes(x = date, y = actual, color = loc))+
-  geom_point(position = position_dodge(width=0.3))+
-  geom_linerange(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper, position = position_dodge(width=0.3))+
-  expand_limits(ymin = 15, ymax = 60)+
-  theme_few()+
-  labs(x = "Date", y = lab_conc_airborne, color = "Location")
-```
-
-```{r 95ci, eval = FALSE, include = FALSE}
-#using unadjusted data
-# conc_ci <- conc_summary %>%
-#   mutate(se = qnorm(0.975)*sd_conc/sqrt(n),
-#          lower_ci = mean_conc - se,
-#          upper_ci = mean_conc + se)
+# airborne_conc <- conc_summary %>%
+#   mutate(actual = mean_conc*2*70/24,
+#          actual_e = conc_error*2*70/24,
+#          actual_lower = actual-actual_e,
+#          actual_upper = actual+actual_e) # 2mL dilution factor (1mL water + 1mL ethanol), 70 b/c cut 1in^2, 24 hr
 # 
-# ggplot(conc_ci, aes(x = loc_date, y = mean_conc))+
-#   geom_point()+
-#   geom_errorbar(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
-#   expand_limits(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
-#   theme_few()
-
-#using adjusted data
-conc_ci_adj <- airborne_conc %>%
-  mutate(actual_sd = sd_conc*2*70/24,
-         se = qnorm(0.975)*actual_sd/sqrt(n),
-         lower_ci = actual - se,
-         upper_ci = actual + se)
-
-# ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
+# lab_conc_airborne <- expression(paste("Airborne concentration (", mu, "g/m"^3*")"))
+# 
+# # ggplot(airborne_conc, aes(x = loc_date, y = actual, color = date))+
+# #   geom_point()+
+# #   geom_errorbar(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
+# #   expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$actual_upper)+
+# #   theme_few()
+# 
+# ggplot(airborne_conc, aes(x = date, y = actual, color = loc))+
 #   facet_wrap(~loc)+
 #   geom_point()+
-#   geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci)+
+#   geom_linerange(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
+#   #expand_limits(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper)+
 #   expand_limits(ymin = 15, ymax = 60)+
 #   theme_few()+
 #   labs(x = "Date", y = lab_conc_airborne)+
 #   theme(legend.position = "none")
-
-ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
-  geom_point(position = position_dodge(width=0.9))+
-  geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci, position = position_dodge(width=0.9))+
-  expand_limits(ymin = 15, ymax = 60)+
-  theme_few()+
-  labs(x = "Date", y = lab_conc_airborne, color = "Location")
-
-##ggsave("ci95.png", plot = ci95, path = "figures/")
-
-
-# ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
-#   geom_point(position = position_dodge(width=0.9))+
-#   geom_linerange(ymin = conc_ci_adj$actual_lower, ymax = conc_ci_adj$actual_upper, position = position_dodge(width=0.9), alpha=0.5, linetype="dotted")+
-#   geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci, position = position_dodge(width=0.9))+
+# 
+# ggplot(airborne_conc, aes(x = date, y = actual, color = loc))+
+#   geom_point(position = position_dodge(width=0.3))+
+#   geom_linerange(ymin = airborne_conc$actual_lower, ymax = airborne_conc$actual_upper, position = position_dodge(width=0.3))+
 #   expand_limits(ymin = 15, ymax = 60)+
 #   theme_few()+
 #   labs(x = "Date", y = lab_conc_airborne, color = "Location")
 ```
 
+```{r 95ci, eval = FALSE, include = FALSE}
+# #using unadjusted data
+# # conc_ci <- conc_summary %>%
+# #   mutate(se = qnorm(0.975)*sd_conc/sqrt(n),
+# #          lower_ci = mean_conc - se,
+# #          upper_ci = mean_conc + se)
+# # 
+# # ggplot(conc_ci, aes(x = loc_date, y = mean_conc))+
+# #   geom_point()+
+# #   geom_errorbar(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
+# #   expand_limits(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
+# #   theme_few()
+# 
+# #using adjusted data
+# conc_ci_adj <- airborne_conc %>%
+#   mutate(actual_sd = sd_conc*2*70/24,
+#          se = qnorm(0.975)*actual_sd/sqrt(n),
+#          lower_ci = actual - se,
+#          upper_ci = actual + se)
+# 
+# # ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
+# #   facet_wrap(~loc)+
+# #   geom_point()+
+# #   geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci)+
+# #   expand_limits(ymin = 15, ymax = 60)+
+# #   theme_few()+
+# #   labs(x = "Date", y = lab_conc_airborne)+
+# #   theme(legend.position = "none")
+# 
+# ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
+#   geom_point(position = position_dodge(width=0.9))+
+#   geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci, position = position_dodge(width=0.9))+
+#   expand_limits(ymin = 15, ymax = 60)+
+#   theme_few()+
+#   labs(x = "Date", y = lab_conc_airborne, color = "Location")
+# 
+# ##ggsave("ci95.png", plot = ci95, path = "figures/")
+# 
+# 
+# # ggplot(conc_ci_adj, aes(x = date, y = actual, color = loc))+
+# #   geom_point(position = position_dodge(width=0.9))+
+# #   geom_linerange(ymin = conc_ci_adj$actual_lower, ymax = conc_ci_adj$actual_upper, position = position_dodge(width=0.9), alpha=0.5, linetype="dotted")+
+# #   geom_errorbar(ymin = conc_ci_adj$lower_ci, ymax = conc_ci_adj$upper_ci, position = position_dodge(width=0.9))+
+# #   expand_limits(ymin = 15, ymax = 60)+
+# #   theme_few()+
+# #   labs(x = "Date", y = lab_conc_airborne, color = "Location")
+```
+
 ```{r anova, eval = FALSE, include = FALSE}
-anova_df <- NULL
-aov_test <- function(unique_site){
-  filtered_df <- conc_results %>%
-    mutate(actual = conc*2*70/24) %>%
-    filter(loc == unique_site)
-  
-  anova <- aov(actual ~ date, data = filtered_df) %>%
-    tidy()
-  anova <- as.data.frame(anova) %>%
-    mutate(site = unique_site)
-  anova_df <<-rbind(anova_df, anova)
-  #return(anova_df)
-}
-
-# I know I could write a function for this but it's being finicky
-aov_test("W")
-aov_test("E")
-
-anova_df <- anova_df %>%
-    mutate(label = case_when(
-    p.value < 0.05 ~ "p < 0.05", # Reject null hypothesiss; diff is significant
-    p.value >= 0.05 ~ "Non-Sig" # Fail to reject null hyp; diff is not significant
-  ))
-
-anova_df
+# anova_df <- NULL
+# aov_test <- function(unique_site){
+#   filtered_df <- conc_results %>%
+#     mutate(actual = conc*2*70/24) %>%
+#     filter(loc == unique_site)
+#   
+#   anova <- aov(actual ~ date, data = filtered_df) %>%
+#     tidy()
+#   anova <- as.data.frame(anova) %>%
+#     mutate(site = unique_site)
+#   anova_df <<-rbind(anova_df, anova)
+#   #return(anova_df)
+# }
+# 
+# # I know I could write a function for this but it's being finicky
+# aov_test("W")
+# aov_test("E")
+# 
+# anova_df <- anova_df %>%
+#     mutate(label = case_when(
+#     p.value < 0.05 ~ "p < 0.05", # Reject null hypothesiss; diff is significant
+#     p.value >= 0.05 ~ "Non-Sig" # Fail to reject null hyp; diff is not significant
+#   ))
+# 
+# anova_df
 ```
 
 ```{r data viz, eval = FALSE, include = FALSE}
-ggplot(airborne_conc, aes(x = date, y = actual, color = date))+
-  geom_point()+
-  geom_errorbar(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
-  expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
-  theme_few()+
-  facet_wrap(~loc)+
-  coord_flip()
-
-ggplot(airborne_conc, aes(x = date, y = actual, color = loc, group = loc))+
-  #facet_wrap(~loc)+
-  geom_point(position = position_dodge(0.3), stat = "identity")+
-  geom_linerange(ymin = airborne_conc$lower, ymax = airborne_conc$upper,
-                position = position_dodge(0.3), stat = "identity")+
-  expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
-  theme_few()
-
-ggplot(conc_ci, aes(x = loc, y = mean_conc, color = loc))+
-  facet_wrap(~date)+
-  geom_point()+
-  geom_errorbar(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
-  expand_limits(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
-  theme_few()
+# ggplot(airborne_conc, aes(x = date, y = actual, color = date))+
+#   geom_point()+
+#   geom_errorbar(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
+#   expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
+#   theme_few()+
+#   facet_wrap(~loc)+
+#   coord_flip()
+# 
+# ggplot(airborne_conc, aes(x = date, y = actual, color = loc, group = loc))+
+#   #facet_wrap(~loc)+
+#   geom_point(position = position_dodge(0.3), stat = "identity")+
+#   geom_linerange(ymin = airborne_conc$lower, ymax = airborne_conc$upper,
+#                 position = position_dodge(0.3), stat = "identity")+
+#   expand_limits(ymin = airborne_conc$lower, ymax = airborne_conc$upper)+
+#   theme_few()
+# 
+# ggplot(conc_ci, aes(x = loc, y = mean_conc, color = loc))+
+#   facet_wrap(~date)+
+#   geom_point()+
+#   geom_errorbar(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
+#   expand_limits(ymin = conc_ci$lower_ci, ymax = conc_ci$upper_ci)+
+#   theme_few()
 ```
 
 ```{r tukey messy, eval = FALSE, include = FALSE}
